@@ -1,7 +1,5 @@
 FROM python:3.11-slim
 
-# Instala dependências mínimas para Chrome + undetected-chromedriver
-# Removido libgconf-2-4 (não existe mais)
 RUN apt-get update && apt-get install -y \
     wget \
     unzip \
@@ -31,11 +29,9 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copia requirements primeiro (cache de layer)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copia o código
 COPY main.py .
 
 ENV PYTHONUNBUFFERED=1
