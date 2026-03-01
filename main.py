@@ -20,17 +20,34 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID") or "7427648935"
 
 URL = "https://www.premierbet.co.mz/virtuals/game/aviator-291195"
 
-def enviar_telegram(mensagem):
+def enviar_telegram_texto(mensagem):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensagem, "parse_mode": "Markdown"}
     try:
         r = requests.post(url, data=payload, timeout=10, verify=False)
         if r.status_code == 200:
-            logger.info("Mensagem enviada ao Telegram")
+            logger.info("Texto enviado ao Telegram")
         else:
-            logger.error(f"Erro Telegram: {r.status_code} - {r.text}")
+            logger.error(f"Erro texto Telegram: {r.status_code} - {r.text}")
     except Exception as e:
-        logger.error(f"Falha ao enviar: {e}")
+        logger.error(f"Falha texto: {e}")
+
+def enviar_telegram_foto(caminho_foto, legenda=""):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+    files = {'photo': open(caminho_foto, 'rb')}
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "caption": legenda, "parse_mode": "Markdown"}
+    try:
+        r = requests.post(url, data=payload, files=files, timeout=20, verify=False)
+        if r.status_code == 200:
+            logger.info("Foto enviada ao Telegram")
+        else:
+            logger.error(f"Erro foto Telegram: {r.status_code} - {r.text}")
+    except Exception as e:
+        logger.error(f"Falha foto: {e}")
+    finally:
+        # Remove arquivo temporário
+        if os.path.exists(caminho_foto):
+            os.remove(caminho_foto)
 
 def iniciar_driver():
     options = uc.ChromeOptions()
@@ -42,8 +59,7 @@ def iniciar_driver():
     options.add_argument("--disable-gpu")
     options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
 
-    # Caminho do Chromium no container Debian
-    options.binary_location = "/usr/bin/chromium"
+    options.binary_location = "/usr/bin/chromium-browser"
 
     return uc.Chrome(options=options, headless=True, version_main=145)
 
@@ -57,18 +73,29 @@ logger.info("Monitoramento iniciado...")
 while True:
     try:
         driver.get(URL)
-        time.sleep(random.uniform(8, 15))
+        time.sleep(random.uniform(10, 20))
 
-        # Tenta entrar no iframe
-        try:
-            iframe = WebDriverWait(driver, 20).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "iframe.casino-game-launch-iframe__frame"))
-            )
-            driver.switch_to.frame(iframe)
-            logger.info("Entrou no iframe")
-        except:
-            logger.warning("Iframe não encontrado, tentando novamente...")
-            time.sleep(10)
+        # Tenta entrar no iframe com retry
+        iframe_ok = False
+        for attempt in range(5):
+            try:
+                iframe = WebDriverWait(driver, 20).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "iframe.casino-game-launch-iframe__frame"))
+                )
+                driver.switch_to.frame(iframe)
+                logger.info("Entrou no iframe (tentativa %s)", attempt + 1)
+                iframe_ok = True
+                break
+            except TimeoutException:
+                logger.warning("Iframe não encontrado na tentativa %s", attempt + 1)
+                driver.refresh()
+                time.sleep(10)
+
+        if not iframe_ok:
+            logger.error("Iframe não encontrado após retries")
+            driver.quit()
+            driver = iniciar_driver()
+            time.sleep(30)
             continue
 
         # Captura histórico
@@ -91,14 +118,21 @@ while True:
                 historico_anterior = historico_atual[:]
 
                 lista_str = ", ".join(f"{v:.2f}" for v in historico_atual[-30:])
-                msg = (
+                legenda = (
                     f"*Histórico Atualizado – Aviator Premier Bet*\n\n"
                     f"[{lista_str}]\n\n"
                     f"Total visível: **{len(historico_atual)}** rodadas\n"
                     f"Mais recente: **{historico_atual[-1]:.2f}x**"
                 )
-                logger.info("Novo histórico detectado. Enviando...")
-                enviar_telegram(msg)
+
+                # Captura screenshot da área do histórico
+                timestamp = time.strftime("%Y%m%d_%H%M%S")
+                screenshot_path = f"/tmp/historico_{timestamp}.png"
+                driver.save_screenshot(screenshot_path)
+
+                logger.info("Novo histórico detectado. Enviando texto + foto...")
+                enviar_telegram_texto(legenda)
+                enviar_telegram_foto(screenshot_path, legenda="Captura atual do histórico")
 
         except Exception as e:
             logger.error(f"Erro ao capturar histórico: {e}")
