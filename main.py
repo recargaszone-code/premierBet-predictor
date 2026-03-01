@@ -10,7 +10,7 @@ import random
 import os
 import logging
 
-# Config log para Render (logs aparecem no dashboard)
+# Config log para Render
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -38,12 +38,12 @@ def iniciar_driver():
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument("--window-size=1366,768")
-    options.add_argument("--headless=new")  # headless novo do Chrome 109+
+    options.add_argument("--headless=new")
     options.add_argument("--disable-gpu")
     options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
 
-    # Força binary_location para evitar erro no headless
-    options.binary_location = "/usr/bin/google-chrome"  # caminho padrão no container
+    # Caminho do Chromium no container Debian
+    options.binary_location = "/usr/bin/chromium"
 
     return uc.Chrome(options=options, headless=True, version_main=145)
 
