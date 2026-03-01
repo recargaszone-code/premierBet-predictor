@@ -10,7 +10,7 @@ import random
 import os
 import logging
 
-# Configuração de log (útil no Render)
+# Config log para Render (logs aparecem no dashboard)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -30,38 +30,25 @@ def enviar_telegram(mensagem):
         else:
             logger.error(f"Erro Telegram: {r.status_code} - {r.text}")
     except Exception as e:
-        logger.error(f"Falha ao enviar mensagem: {e}")
+        logger.error(f"Falha ao enviar: {e}")
 
-def clicar_mais_tarde(driver):
-    try:
-        btn = WebDriverWait(driver, 5).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, "button.kumulos-action-button.kumulos-action-button-cancel"))
-        )
-        btn.click()
-        logger.info("Botão 'Mais Tarde' clicado")
-        time.sleep(2)
-    except:
-        pass
-
-# ==================== CONFIGURAÇÃO DO NAVEGADOR ====================
 def iniciar_driver():
     options = uc.ChromeOptions()
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument("--window-size=1366,768")
-    options.add_argument("--headless")  # headless para rodar no Render
+    options.add_argument("--headless=new")  # headless novo do Chrome 109+
     options.add_argument("--disable-gpu")
     options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
 
-    return uc.Chrome(version_main=145, options=options, headless=True)
+    # Força binary_location para evitar erro no headless
+    options.binary_location = "/usr/bin/google-chrome"  # caminho padrão no container
+
+    return uc.Chrome(options=options, headless=True, version_main=145)
 
 driver = iniciar_driver()
-
-logger.info("Iniciando script 24/7...")
-
-# Login (faça manualmente na primeira vez se necessário ou ajuste credenciais)
-# Aqui você pode deixar comentado se já estiver logado no perfil do navegador
+logger.info("Driver iniciado com sucesso")
 
 historico_anterior = []
 
@@ -69,8 +56,6 @@ logger.info("Monitoramento iniciado...")
 
 while True:
     try:
-        clicar_mais_tarde(driver)
-
         driver.get(URL)
         time.sleep(random.uniform(8, 15))
 
@@ -88,11 +73,11 @@ while True:
 
         # Captura histórico
         try:
-            payouts_block = WebDriverWait(driver, 15).until(
+            items_wrapper = WebDriverWait(driver, 15).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "div._itemsWrapper_7l84e_35"))
             )
 
-            spans = payouts_block.find_elements(
+            spans = items_wrapper.find_elements(
                 By.CSS_SELECTOR, "button._container_12jzl_1 span._container_1p5jb_1"
             )
 
@@ -118,12 +103,10 @@ while True:
         except Exception as e:
             logger.error(f"Erro ao capturar histórico: {e}")
 
-        # Volta para contexto principal (evita problemas de frame)
         driver.switch_to.default_content()
 
     except Exception as e:
         logger.error(f"Erro geral no loop: {e}")
-        # Reinicia o driver em caso de crash grave
         try:
             driver.quit()
         except:
@@ -131,4 +114,4 @@ while True:
         driver = iniciar_driver()
         time.sleep(30)
 
-    time.sleep(random.uniform(60, 120))  # intervalo entre verificações (1-2 minutos)
+    time.sleep(random.uniform(60, 120))  # 1-2 min entre verificações
